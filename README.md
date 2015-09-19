@@ -51,38 +51,50 @@ prepackage the entire compiler toolchain. On configuration, dato-deps is
 downloaded and unpacked into the deps/ directory
 
 ### OS X
-At least OS X 10.9. OS X 10.10 preferred.
 
-* On OS X: Apple XCode 6 Command Line Tools [Required]
-  +  "clang --version" should report at least
+**Required**
+
+* OS X 10.9 (though 10.10 is preferred)
+* Apple XCode 6 Command Line Tools: `clang --version` should report at least
      "Apple LLVM version 6.1.0 (clang-602.0.53) (based on LLVM 3.6.0svn)"
 
-* ccache [Optional]
-   + Not required, but highly recommended
-
-* cmake >= 3.2 [Optional]
-   + Not required, but highly recommended
+**Recommended**
+* ccache 
+* cmake >= 3.2 
 
 ### Linux
 
-* *nix build tools: patch, make [Required]
-   +  Should come with most Mac/Linux systems by default. Recent Ubuntu versions
-   will require installing the build-essential package.
+**Required**
 
-* zlib [Required]
-   +   Comes with most Mac/Linux systems by default. Recent Ubuntu version will
-   require the zlib1g-dev package.
+* patch, make: Should come with most Mac/Linux systems by default. Recent 
+Ubuntu versions will require installing the build-essential package.
+* zlib. Comes with most Mac/Linux systems by default. Recent Ubuntu version will
+require the zlib1g-dev package.
 
-* ccache [Optional]
-   + Not required, but highly recommended
-
-* cmake >= 3.2 [Optional]
-   + Not required, but highly recommended
+**Recommended**
+* ccache 
+* cmake >= 3.2 
 
 ### Windows
 
 This is somewhat more involving. See the wiki.
 
+Quick start
+---------------------------------
+
+Build the project. See below for details.
+
+    cd SFrame
+    ./configure
+    cd debug/oss_src/unity
+    make -j4
+
+    cd ../../../
+    source oss_local_scripts/python_env.sh debug
+
+Now in python, you should be able to import sframe.
+
+    >>> import sframe
 
 Compiling
 ---------
@@ -95,14 +107,13 @@ Running configure will create two sub-directories, *release* and *debug*.  Selec
 either of these modes/directories and navigate to the *oss_src/unity* subdirectory:
 
     cd <repo root>/debug/oss_src/unity/python
-   
-   or
-   
+
+or
+
     cd <repo root>/release/oss_src/unity/python
 
-Running **make** will build the project, according to the mode selected. 
-
-We recommend using make's parallel build feature to accelerate the compilation
+Running **make** will build the project, according to the mode selected. We 
+recommend using make's parallel build feature to accelerate the compilation 
 process. For instance:
 
     make -j 4
@@ -120,7 +131,7 @@ variables will need to be set.  This can be done by sourcing a script. You'll
 need to pass the script either "debug" or "release" depending on the type of
 build you have compiled:
   
-    source <repo root>/oss_local_scripts/python_env.sh [debug | release ]
+    source <repo root>/oss_local_scripts/python_env.sh [debug | release]
 
 This will activate the miniconda toolchain, and you can run python directly
 and import sframe, etc.
@@ -155,21 +166,6 @@ There are also C++ tests. To compile and run them, do the following:
     make
     ctest
   
-Compilation and Execution Summary
----------------------------------
-To summarize the above, to just build and run SFrame in the debug build directory:
-
-    ./configure
-    cd debug/oss_src/unity
-    make -j4
-
-    # where root is the checked out SFrame directory
-    source <root>/oss_local_scripts/python_env.sh debug
-
-    # import sframe should work here
-    python
-
-
 Packaging
 ---------
 To build an egg for your platform, run
