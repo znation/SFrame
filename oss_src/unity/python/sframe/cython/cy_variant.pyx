@@ -676,8 +676,8 @@ cdef _convert_to_variant_type(variant_type& ret, object v, int tr_code):
         variant_set_closure(ret, make_function_closure_info(v))
 
     # Flexible type -- this is actually the last resort since we
-    # assume the aboves are exact matches and do not include the
-    # flexible type stuff.
+    # assume the above types are exact matches and do not include the
+    # flexible type stuff, save for the fast paths for common types.
     elif tr_code == VAR_TR_ATTEMPT_OTHER_FLEXIBLE_TYPE:
         try:
             variant_set_flexible_type(ret, flexible_type_from_pyobject(v))
@@ -685,8 +685,7 @@ cdef _convert_to_variant_type(variant_type& ret, object v, int tr_code):
             raise_translation_error(v)
 
     else:
-        assert False
-
+        assert False    
 
 ################################################################################
 # The main translation function
@@ -758,3 +757,14 @@ cdef to_value(PyCommClient cli, variant_type& v):
         return to_vector(cli, variant_get_variant_vector(v))
     else:
         raise TypeError("Unsupported variant type.")
+
+################################################################################
+# Routines to assist with debugging. 
+    
+def _debug_is_flexible_type_encoded(object obj):
+    """
+    Checks to make sure that if an object can be encoded as a flexible
+    type, then it is.
+    """
+    cdef variant_type vt = from_value(obj)
+    return (vt.which() == VAR_TYPE_FLEXIBLE_TYPE)            
