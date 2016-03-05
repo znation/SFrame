@@ -5,6 +5,13 @@
  * This software may be modified and distributed under the terms
  * of the BSD license. See the LICENSE file for details.
  */
+
+/******************************************************************************
+ * WARNING! This JSON utility is deprecated.                                  *
+ * For bidirectional JSON serialization of SFrame, SArray, and flexible_type, *
+ * use "json.hpp" in this directory.                                          *
+ ******************************************************************************/
+
 #ifndef GRAPHLAB_JSON_INCLUDE
 #define GRAPHLAB_JSON_INCLUDE
 

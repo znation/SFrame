@@ -29,4 +29,5 @@ subdirs(
   table_printer
   network
   process
+  json
   )

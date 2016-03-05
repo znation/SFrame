@@ -42,4 +42,5 @@ subdirs(
   unity
   image
   table_printer
+  json
   )
