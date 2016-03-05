@@ -1,7 +1,7 @@
 #include "json_flexible_type.hpp"
 
-#include "../rapidjson/writer.h"
-#include "../rapidjson/ostreamwrapper.h"
+#include <rapidjson/writer.h>
+#include <rapidjson/ostreamwrapper.h>
 
 #include <stdexcept>
 
@@ -12,7 +12,7 @@ using namespace graphlab;
 typedef rapidjson::Writer<rapidjson::OStreamWrapper> json_writer;
 void _dump(flexible_type input, json_writer& output); // defined below
 
-std::string JSON::dumps(flexible_type input) {
+flex_string JSON::dumps(flexible_type input) {
   std::stringstream output;
   JSON::dump(input, output);
   return output.str();
