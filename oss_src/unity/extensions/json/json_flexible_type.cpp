@@ -1,8 +1,7 @@
+#include "json.hpp"
 #include "json_flexible_type.hpp"
 
 #include <rapidjson/document.h>
-#include <rapidjson/writer.h>
-#include <rapidjson/ostreamwrapper.h>
 #include <rapidjson/istreamwrapper.h>
 #include <rapidjson/error/en.h>
 
@@ -14,27 +13,18 @@ using namespace graphlab;
 
 // TODO znation -- use JSON schema as described in http://rapidjson.org/md_doc_schema.html
 
-typedef rapidjson::Writer<rapidjson::OStreamWrapper> json_writer;
-
 // forward declarations
-static void _dump(flexible_type input, json_writer& output);
 static flexible_type _load(const rapidjson::Value& root);
 static flexible_type _extract(const flexible_type& value);
 
-flex_string JSON::dumps(flexible_type input) {
-  std::stringstream output;
-  JSON::dump(input, output);
-  return output.str();
-}
-
-static void _dump_int(flex_int input, json_writer& output) {
+static void _dump_int(flex_int input, JSON::writer& output) {
   // we can write integers of any size -- they turn into 64-bit float in JS,
   // but the serialization format doesn't specify a max int value.
   // see http://stackoverflow.com/questions/13502398/json-integers-limit-on-size
   output.Int64(input);
 }
 
-static void _dump_float(flex_float input, json_writer& output) {
+static void _dump_float(flex_float input, JSON::writer& output) {
   // Float values (like 0.0 or -234.56) are allowed in JSON,
   // but not inf, -inf, or nan. Have to adjust for those.
   if (!std::isnan(input) && !std::isinf(input)) {
@@ -60,33 +50,33 @@ static void _dump_float(flex_float input, json_writer& output) {
   output.EndObject();
 }
 
-static void _dump_string(flex_string input, json_writer& output) {
+static void _dump_string(flex_string input, JSON::writer& output) {
   output.String(input.c_str(), input.size());
 }
 
 template<typename T>
-static void _dump(std::vector<T> input, json_writer& output, flex_type_enum type_hint) {
+static void _dump(std::vector<T> input, JSON::writer& output, flex_type_enum type_hint) {
   output.StartObject();
   output.Key("type");
   output.String(flex_type_enum_to_name(type_hint));
   output.Key("value");
   output.StartArray();
   for (const T& element : input) {
-    _dump(element, output);
+    JSON::dump(element, output);
   }
   output.EndArray();
   output.EndObject();
 }
 
-static void _dump_vector(flex_vec input, json_writer& output) {
+static void _dump_vector(flex_vec input, JSON::writer& output) {
   _dump<flex_float>(input, output, flex_type_enum::VECTOR);
 }
 
-static void _dump_list(flex_list input, json_writer& output) {
+static void _dump_list(flex_list input, JSON::writer& output) {
   _dump<flexible_type>(input, output, flex_type_enum::LIST);
 }
 
-static void _dump_dict(flex_dict input, json_writer& output) {
+static void _dump_dict(flex_dict input, JSON::writer& output) {
   output.StartObject();
   output.Key("type");
   output.String(flex_type_enum_to_name(flex_type_enum::DICT));
@@ -96,13 +86,13 @@ static void _dump_dict(flex_dict input, json_writer& output) {
     const flex_string& key = kv.first;
     const flexible_type& value = kv.second;
     output.Key(key.c_str());
-    _dump(value, output);
+    JSON::dump(value, output);
   }
   output.EndObject();
   output.EndObject();
 }
 
-static void _dump_date_time(flex_date_time input, json_writer& output) {
+static void _dump_date_time(flex_date_time input, JSON::writer& output) {
   int32_t time_zone_offset = input.time_zone_offset();
   _dump<flexible_type>(std::vector<flexible_type>({
     input.posix_timestamp(),
@@ -111,7 +101,7 @@ static void _dump_date_time(flex_date_time input, json_writer& output) {
   }), output, flex_type_enum::DATETIME);
 }
 
-static void _dump_image(flex_image input, json_writer& output) {
+static void _dump_image(flex_image input, JSON::writer& output) {
   output.StartObject();
   output.Key("type");
   output.String(flex_type_enum_to_name(flex_type_enum::IMAGE));
@@ -138,7 +128,7 @@ static void _dump_image(flex_image input, json_writer& output) {
   output.EndObject();
 }
 
-static void _dump(flexible_type input, json_writer& output) {
+static void _dump(flexible_type input, JSON::writer& output) {
   switch (input.get_type()) {
     case flex_type_enum::INTEGER:
       _dump_int(input.get<flex_int>(), output);
@@ -168,12 +158,6 @@ static void _dump(flexible_type input, json_writer& output) {
       output.Null();
       break;
   }
-}
-
-void JSON::dump(flexible_type input, std::ostream& output) {
-  rapidjson::OStreamWrapper wrapper(output);
-  json_writer writer(wrapper);
-  _dump(input, writer);
 }
 
 static flex_list _load_array(const rapidjson::Value& array) {
@@ -343,12 +327,12 @@ static flexible_type _extract(const flexible_type& value) {
   }
 }
 
-flexible_type JSON::loads(flex_string input) {
+flexible_type JSON::loads_flex_type(flex_string input) {
   std::stringstream stream(input);
-  return JSON::load(stream);
+  return JSON::load_flex_type(stream);
 }
 
-flexible_type JSON::load(std::istream& input) {
+flexible_type JSON::load_flex_type(std::istream& input) {
   rapidjson::IStreamWrapper wrapper(input);
   rapidjson::Document document;
   document.ParseStream(wrapper);

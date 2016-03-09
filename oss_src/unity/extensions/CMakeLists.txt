@@ -12,6 +12,8 @@ make_extension(internal_demo SOURCES internal_demo.cpp)
 make_extension(json SOURCES
   json/json.cpp
   json/json_flexible_type.cpp
+  json/json_sarray.cpp
+  json/registration.cpp
 )
 make_extension(random_sframe_generation SOURCES random_sframe_generation.cpp)
 

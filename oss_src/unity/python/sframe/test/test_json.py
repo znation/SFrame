@@ -135,3 +135,14 @@ class JSONTest(unittest.TestCase):
         [self._run_test_case(value) for value in [
             sframe.Image(path=item.url, format=item.format) for item in image_info
         ]]
+
+    def test_sarray_to_json(self):
+        [self._run_test_case(value) for value in [
+            sframe.SArray()
+        ]]
+
+    #def test_sframe_to_json(self):
+    #    [self._run_test_case(value) for value in [
+    #        sframe.SFrame(),
+    #        sframe.SFrame({'x': [1,2,3], 'y': ['a','b','c']})
+    #    ]]
