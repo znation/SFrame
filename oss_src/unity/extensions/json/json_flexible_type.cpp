@@ -1,8 +1,13 @@
 #include "json_flexible_type.hpp"
 
+#include <rapidjson/document.h>
 #include <rapidjson/writer.h>
 #include <rapidjson/ostreamwrapper.h>
+#include <rapidjson/istreamwrapper.h>
+#include <rapidjson/error/en.h>
 
+#include <cassert>
+#include <cmath>
 #include <stdexcept>
 
 using namespace graphlab;
@@ -10,7 +15,11 @@ using namespace graphlab;
 // TODO znation -- use JSON schema as described in http://rapidjson.org/md_doc_schema.html
 
 typedef rapidjson::Writer<rapidjson::OStreamWrapper> json_writer;
-void _dump(flexible_type input, json_writer& output); // defined below
+
+// forward declarations
+static void _dump(flexible_type input, json_writer& output);
+static flexible_type _load(const rapidjson::Value& root);
+static flexible_type _extract(const flexible_type& value);
 
 flex_string JSON::dumps(flexible_type input) {
   std::stringstream output;
@@ -18,52 +27,70 @@ flex_string JSON::dumps(flexible_type input) {
   return output.str();
 }
 
-void _dump_int(flex_int input, json_writer& output) {
+static void _dump_int(flex_int input, json_writer& output) {
   // we can write integers of any size -- they turn into 64-bit float in JS,
   // but the serialization format doesn't specify a max int value.
   // see http://stackoverflow.com/questions/13502398/json-integers-limit-on-size
   output.Int64(input);
 }
 
-void _dump_float(flex_float input, json_writer& output) {
+static void _dump_float(flex_float input, json_writer& output) {
   // Float values (like 0.0 or -234.56) are allowed in JSON,
   // but not inf, -inf, or nan. Have to adjust for those.
+  if (!std::isnan(input) && !std::isinf(input)) {
+    // finite float value, can output as is.
+    output.Double(input);
+    return;
+  }
+
+  output.StartObject();
+  output.Key("type");
+  output.String(flex_type_enum_to_name(flex_type_enum::FLOAT));
+  output.Key("value");
   if (std::isnan(input)) {
     output.String("NaN");
-  } else if (std::isinf(input)) {
+  } else {
+    assert(std::isinf(input));
     if (input > 0) {
       output.String("Infinity");
     } else {
       output.String("-Infinity");
     }
-  } else {
-    // finite float value, can output as is.
-    output.Double(input);
   }
+  output.EndObject();
 }
 
-void _dump_string(flex_string input, json_writer& output) {
+static void _dump_string(flex_string input, json_writer& output) {
   output.String(input.c_str());
 }
 
 template<typename T>
-static void _dump(std::vector<T> input, json_writer& output) {
+static void _dump(std::vector<T> input, json_writer& output, flex_type_enum type_hint) {
+  output.StartObject();
+  output.Key("type");
+  output.String(flex_type_enum_to_name(type_hint));
+  output.Key("value");
   output.StartArray();
   for (const T& element : input) {
     _dump(element, output);
   }
   output.EndArray();
+  output.EndObject();
 }
 
-void _dump_vector(flex_vec input, json_writer& output) {
-  _dump<flex_float>(input, output);
+static void _dump_vector(flex_vec input, json_writer& output) {
+  _dump<flex_float>(input, output, flex_type_enum::VECTOR);
 }
 
-void _dump_list(flex_list input, json_writer& output) {
-  _dump<flexible_type>(input, output);
+static void _dump_list(flex_list input, json_writer& output) {
+  _dump<flexible_type>(input, output, flex_type_enum::LIST);
 }
 
-void _dump_dict(flex_dict input, json_writer& output) {
+static void _dump_dict(flex_dict input, json_writer& output) {
+  output.StartObject();
+  output.Key("type");
+  output.String(flex_type_enum_to_name(flex_type_enum::DICT));
+  output.Key("value");
   output.StartObject();
   for (const auto& kv : input) {
     const flex_string& key = kv.first;
@@ -72,22 +99,23 @@ void _dump_dict(flex_dict input, json_writer& output) {
     _dump(value, output);
   }
   output.EndObject();
+  output.EndObject();
 }
 
-void _dump_date_time(flex_date_time input, json_writer& output) {
+static void _dump_date_time(flex_date_time input, json_writer& output) {
   int32_t time_zone_offset = input.time_zone_offset();
   _dump<flexible_type>(std::vector<flexible_type>({
     input.posix_timestamp(),
     time_zone_offset == 64 ? FLEX_UNDEFINED : flexible_type(flex_int(time_zone_offset)),
     input.microsecond()
-  }), output);
+  }), output, flex_type_enum::DATETIME);
 }
 
-void _dump_image(flex_image input, json_writer& output) {
+static void _dump_image(flex_image input, json_writer& output) {
   // TODO znation: write this function
 }
 
-void _dump(flexible_type input, json_writer& output) {
+static void _dump(flexible_type input, json_writer& output) {
   switch (input.get_type()) {
     case flex_type_enum::INTEGER:
       _dump_int(input.get<flex_int>(), output);
@@ -123,4 +151,172 @@ void JSON::dump(flexible_type input, std::ostream& output) {
   rapidjson::OStreamWrapper wrapper(output);
   json_writer writer(wrapper);
   _dump(input, writer);
+}
+
+static flex_list _load_array(const rapidjson::Value& array) {
+  flex_list ret;
+  for (rapidjson::Value::ConstValueIterator itr = array.Begin();
+       itr != array.End();
+       ++itr) {
+    ret.push_back(_load(*itr));
+  }
+  return ret;
+}
+
+static flex_string _load_string(const rapidjson::Value& str) {
+  return str.GetString();
+}
+
+static flex_dict _load_object(const rapidjson::Value& object) {
+  flex_dict ret;
+  for (rapidjson::Value::ConstMemberIterator itr = object.MemberBegin();
+       itr != object.MemberEnd();
+       ++itr) {
+    ret.push_back(std::make_pair<flex_string, flexible_type>(
+      _load_string(itr->name),
+      _load(itr->value)));
+  }
+  return ret;
+}
+
+static flexible_type _load_number(const rapidjson::Value& number) {
+  if (number.IsFloat() || number.IsDouble()) {
+    return flex_float(number.GetDouble());
+  }
+  return flex_int(number.GetInt64());
+}
+
+static flexible_type _load(const rapidjson::Value& root) {
+  switch (root.GetType()) {
+    case rapidjson::kNullType:
+      return FLEX_UNDEFINED;
+    case rapidjson::kFalseType:
+    case rapidjson::kTrueType:
+      throw "Boolean values are not handled by flexible_type.";
+    case rapidjson::kObjectType:
+      return _load_object(root);
+    case rapidjson::kArrayType:
+      return _load_array(root);
+    case rapidjson::kStringType:
+      return _load_string(root);
+    case rapidjson::kNumberType:
+      return _load_number(root);
+  }
+}
+
+static flex_float _extract_float(const flexible_type& value) {
+  flex_string str_value = value.get<flex_string>();
+  if (str_value == "NaN") {
+    return flex_float(NAN);
+  } else if (str_value == "Infinity") {
+    return flex_float(INFINITY);
+  } else if (str_value == "-Infinity") {
+    return flex_float(-INFINITY);
+  } else {
+    throw "Unsupported input for tagged float value. Expected one of the strings \"NaN\", \"Infinity\", or \"-Infinity\".";
+  }
+}
+
+template<typename T>
+static T _extract_list(const flexible_type& value) {
+  flex_list input = value.get<flex_list>();
+  T ret;
+  for (const auto& element : input) {
+    ret.push_back(_extract(element));
+  }
+  return ret;
+}
+
+static flex_dict _extract_dict(const flexible_type& value) {
+  flex_dict input = value.get<flex_dict>();
+  flex_dict ret;
+  for (const auto& kv : input) {
+    ret.push_back(std::make_pair<flex_string, flexible_type>(
+      _extract(kv.first),
+      _extract(kv.second)
+    ));
+  }
+  return ret;
+}
+
+static flex_date_time _extract_date_time(const flexible_type& value) {
+  flex_list input = value.get<flex_list>();
+  int64_t posix_timestamp = input[0].get<flex_int>();
+  int32_t tz_15_min_offset;
+  if (input[1].get_type() == flex_type_enum::UNDEFINED) {
+    tz_15_min_offset = flex_date_time::EMPTY_TIMEZONE;
+  } else {
+    tz_15_min_offset = input[1].get<flex_int>();
+  }
+  int32_t microsecond = input[2].get<flex_int>();
+  return flex_date_time(
+    posix_timestamp,
+    tz_15_min_offset,
+    microsecond
+  );
+}
+
+static flex_image _extract_image(const flexible_type& value) {
+  throw "Not implemented.";
+}
+
+static flexible_type _dict_get(const flex_dict& dict, const flex_string& key) {
+  for (const auto& kv : dict) {
+    if (kv.first == key) {
+      return kv.second;
+    }
+  }
+  std::stringstream msg;
+  msg << "Expected key \"";
+  msg << key;
+  msg << "\" was not present in dictionary input.";
+  throw msg.str();
+}
+
+static flexible_type _extract(const flexible_type& value) {
+  if (value.get_type() != flex_type_enum::DICT) {
+    // only dict type encodes type tag
+    return value;
+  }
+  flex_dict value_dict = value.get<flex_dict>();
+  if (value_dict.size() != 2) {
+    throw "Expected a dictionary with exactly two keys (\"type\" and \"value\").";
+  }
+
+  flex_string type_tag_string = _dict_get(value_dict, "type").get<flex_string>();
+  flexible_type underlying_value = _dict_get(value_dict, "value");
+  flex_type_enum type_tag = flex_type_enum_from_name(type_tag_string);
+  switch (type_tag) {
+    case flex_type_enum::FLOAT:
+      return _extract_float(underlying_value);
+    case flex_type_enum::VECTOR:
+      return _extract_list<flex_vec>(underlying_value);
+    case flex_type_enum::LIST:
+      return _extract_list<flex_list>(underlying_value);
+    case flex_type_enum::DICT:
+      return _extract_dict(underlying_value);
+    case flex_type_enum::DATETIME:
+      return _extract_date_time(underlying_value);
+    case flex_type_enum::IMAGE:
+      return _extract_image(underlying_value);
+    default:
+      throw "Type tag is not a supported type tag for flexible_type JSON serialization. The tagged type probably has a non-lossy underlying representation in plain JSON.";
+  }
+}
+
+flexible_type JSON::loads(flex_string input) {
+  std::stringstream stream(input);
+  return JSON::load(stream);
+}
+
+flexible_type JSON::load(std::istream& input) {
+  rapidjson::IStreamWrapper wrapper(input);
+  rapidjson::Document document;
+  document.ParseStream(wrapper);
+  if (document.HasParseError()) {
+    throw rapidjson::GetParseError_En(document.GetParseError());
+  }
+  flexible_type ret = _load(document); // naive load from JSON
+  ret = _extract(ret); // transform to original flexible_type representation
+  return ret;
 }

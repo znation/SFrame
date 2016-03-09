@@ -8,58 +8,88 @@ of the BSD license. See the LICENSE file for details.
 
 import array
 import datetime
+import math
 import pytz
 import sframe
 import unittest
 
-dumps = sframe.extensions.json.dumps
-
 class JSONTest(unittest.TestCase):
+    def _run_test_case(self, value):
+        # test that JSON serialization is invertible with respect to both
+        # value and type.
+        json = sframe.extensions.json.dumps(value)
+        self.assertEquals(type(sframe.extensions.json.loads(json)), type(value))
+        self.assertEquals(sframe.extensions.json.loads(json), value)
+
     def test_int(self):
-      self.assertEquals(dumps(-2147483649), "-2147483649")
-      self.assertEquals(dumps(2147483648), "2147483648")
+        [self._run_test_case(value) for value in [
+            0,
+            1,
+            -2147483650,
+            -2147483649, # boundary of accurate representation in JS 64-bit float
+            2147483648, # boundary of accurate representation in JS 64-bit float
+            2147483649
+        ]]
 
     def test_float(self):
-      self.assertEquals(dumps(float('nan')), "\"NaN\"");
-      self.assertEquals(dumps(float('-inf')), "\"-Infinity\"");
-      self.assertEquals(dumps(-1.1), "-1.1");
-      self.assertEquals(dumps(-1.0), "-1.0");
-      self.assertEquals(dumps(0.0), "0.0");
-      self.assertEquals(dumps(1.0), "1.0");
-      self.assertEquals(dumps(1.1), "1.1");
-      self.assertEquals(dumps(float('inf')), "\"Infinity\"");
+        [self._run_test_case(value) for value in [
+            -1.1,
+            -1.0,
+            0.0,
+            1.0,
+            1.1,
+            float('-inf'),
+            float('inf')
+        ]]
+        self.assertTrue(
+            math.isnan(
+                sframe.extensions.json.loads(
+                    sframe.extensions.json.dumps(float('nan')))))
 
     def test_string_to_json(self):
-      self.assertEquals(dumps("hello"), "\"hello\"");
-      self.assertEquals(dumps("a'b"), "\"a'b\"");
-      self.assertEquals(dumps("a\"b"), "\"a\\\"b\"");
-      # TODO znation - test non-ascii, non-utf-8 charsets. test null byte inside string.
+        # TODO znation - test non-ascii, non-utf-8 charsets. test null byte inside string.
+        [self._run_test_case(value) for value in [
+            "hello",
+            "a'b",
+            "a\"b"
+        ]]
 
     def test_vec_to_json(self):
-      self.assertEquals(dumps(array.array('d')), "[]");
-      self.assertEquals(dumps(array.array('d', [1.5])), "[1.5]");
-      self.assertEquals(dumps(array.array('d', [2.1,2.5,3.1])), "[2.1,2.5,3.1]");
+        [self._run_test_case(value) for value in [
+            array.array('d'),
+            array.array('d', [1.5]),
+            array.array('d', [2.1,2.5,3.1])
+        ]]
 
     def test_list_to_json(self):
-      self.assertEquals(dumps([]), "[]");
-      self.assertEquals(dumps([1,2]), "[1.0,2.0]"); # TODO should these stay int?
-      self.assertEquals(dumps(["hello", 3, None]), "[\"hello\",3,null]");
+        [self._run_test_case(value) for value in [
+            [],
+            ["hello", "world"],
+            ["hello", 3, None]
+        ]]
+        # TODO -- can't test just numbers, due to (Python <-> flexible_type)
+        # not being reversible for lists of numbers.
+        # if `list` of `int` goes into C++, the flexible_type representation
+        # becomes flex_vec (vector<flex_float>). This is a lossy representation.
+        # known issue, can't resolve here.
 
     def test_dict_to_json(self):
-      self.assertEquals(dumps({}), "{}");
-      self.assertEquals(dumps({
-        "x": 1,
-        "y": 2
-      }), "{\"y\":2,\"x\":1}");
+        [self._run_test_case(value) for value in [
+            {},
+            {
+                "x": 1,
+                "y": 2
+            }
+        ]]
 
     def test_date_time_to_json(self):
-      d = datetime.datetime(year=2016, month=3, day=5)
-      self.assertEquals(dumps(d), "[1457136000,null,0]");
-      d2 = pytz.utc.localize(d)
-      self.assertEquals(dumps(d2), "[1457136000,0,0]");
-      d3 = pytz.timezone('US/Arizona').localize(d)
-      self.assertEquals(dumps(d3), "[1457161200,-28,0]");
+        d = datetime.datetime(year=2016, month=3, day=5)
+        [self._run_test_case(value) for value in [
+            d,
+            pytz.utc.localize(d),
+            pytz.timezone('US/Arizona').localize(d)
+        ]]
 
     def test_image_to_json(self):
-      # TODO znation test image
-      pass
+        # TODO znation test image
+        pass
