@@ -112,7 +112,30 @@ static void _dump_date_time(flex_date_time input, json_writer& output) {
 }
 
 static void _dump_image(flex_image input, json_writer& output) {
-  // TODO znation: write this function
+  output.StartObject();
+  output.Key("type");
+  output.String(flex_type_enum_to_name(flex_type_enum::IMAGE));
+  output.Key("value");
+  output.StartObject();
+  output.Key("height");
+  _dump_int(input.m_height, output);
+  output.Key("width");
+  _dump_int(input.m_width, output);
+  output.Key("channels");
+  _dump_int(input.m_channels, output);
+  output.Key("size");
+  _dump_int(input.m_image_data_size, output);
+  output.Key("version");
+  _dump_int(input.m_version, output);
+  output.Key("format");
+  _dump_int(static_cast<flex_int>(input.m_format), output);
+  output.Key("image_data");
+  _dump_string(flex_string(
+    reinterpret_cast<const char *>(input.get_image_data()),
+    input.m_image_data_size
+  ), output);
+  output.EndObject();
+  output.EndObject();
 }
 
 static void _dump(flexible_type input, json_writer& output) {
@@ -256,10 +279,6 @@ static flex_date_time _extract_date_time(const flexible_type& value) {
   );
 }
 
-static flex_image _extract_image(const flexible_type& value) {
-  throw "Not implemented.";
-}
-
 static flexible_type _dict_get(const flex_dict& dict, const flex_string& key) {
   for (const auto& kv : dict) {
     if (kv.first == key) {
@@ -271,6 +290,26 @@ static flexible_type _dict_get(const flex_dict& dict, const flex_string& key) {
   msg << key;
   msg << "\" was not present in dictionary input.";
   throw msg.str();
+}
+
+static flex_image _extract_image(const flexible_type& value) {
+  flex_string image_data_str = _dict_get(value, "image_data");
+  const char *image_data = image_data_str.c_str();
+  flex_int height = _dict_get(value, "height");
+  flex_int width = _dict_get(value, "width");
+  flex_int channels = _dict_get(value, "channels");
+  flex_int image_data_size = _dict_get(value, "size");
+  flex_int version = _dict_get(value, "version");
+  flex_int format = _dict_get(value, "format");
+  return flex_image(
+    image_data,
+    height,
+    width,
+    channels,
+    image_data_size,
+    version,
+    format
+  );
 }
 
 static flexible_type _extract(const flexible_type& value) {

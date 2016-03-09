@@ -10,9 +10,31 @@ of the BSD license. See the LICENSE file for details.
 import array
 import datetime
 import math
+import os
 import pytz
 import sframe
 import unittest
+
+class image_info:
+    def __init__(self, url):
+        self.url = url
+        if 'png' in url:
+            self.format = 'PNG'
+        elif 'jpg' in url:
+            self.format = 'JPG'
+        if 'grey' in url:
+            self.channels = 1
+        else:
+            self.channels = 3
+
+current_file_dir = os.path.dirname(os.path.realpath(__file__))
+image_urls = [current_file_dir + x for x in [
+    '/images/nested/sample_grey.jpg',
+    '/images/nested/sample_grey.png',
+    '/images/sample.jpg',
+    '/images/sample.png'
+]]
+image_info = [image_info(u) for u in image_urls]
 
 def _print_hex_bytes(s):
     print ":".join("{:02x}".format(ord(c)) for c in s)
@@ -110,5 +132,6 @@ class JSONTest(unittest.TestCase):
         ]]
 
     def test_image_to_json(self):
-        # TODO znation test image
-        pass
+        [self._run_test_case(value) for value in [
+            sframe.Image(path=item.url, format=item.format) for item in image_info
+        ]]
