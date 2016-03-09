@@ -61,7 +61,7 @@ static void _dump_float(flex_float input, json_writer& output) {
 }
 
 static void _dump_string(flex_string input, json_writer& output) {
-  output.String(input.c_str());
+  output.String(input.c_str(), input.size());
 }
 
 template<typename T>
@@ -164,7 +164,7 @@ static flex_list _load_array(const rapidjson::Value& array) {
 }
 
 static flex_string _load_string(const rapidjson::Value& str) {
-  return str.GetString();
+  return flex_string(str.GetString(), str.GetStringLength());
 }
 
 static flex_dict _load_object(const rapidjson::Value& object) {

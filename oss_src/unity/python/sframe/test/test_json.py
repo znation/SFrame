@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 '''
 Copyright (C) 2016 Dato, Inc.
 All rights reserved.
@@ -13,11 +14,21 @@ import pytz
 import sframe
 import unittest
 
+def _print_hex_bytes(s):
+    print ":".join("{:02x}".format(ord(c)) for c in s)
+
 class JSONTest(unittest.TestCase):
     def _run_test_case(self, value):
         # test that JSON serialization is invertible with respect to both
         # value and type.
+        if isinstance(value, str):
+            print "Input string is:"
+            _print_hex_bytes(value)
         json = sframe.extensions.json.dumps(value)
+        print "Serialized json is:"
+        print json
+        print "as hex:"
+        _print_hex_bytes(json)
         self.assertEquals(type(sframe.extensions.json.loads(json)), type(value))
         self.assertEquals(sframe.extensions.json.loads(json), value)
 
@@ -28,7 +39,7 @@ class JSONTest(unittest.TestCase):
             -2147483650,
             -2147483649, # boundary of accurate representation in JS 64-bit float
             2147483648, # boundary of accurate representation in JS 64-bit float
-            2147483649
+            2147483649,
         ]]
 
     def test_float(self):
@@ -39,7 +50,7 @@ class JSONTest(unittest.TestCase):
             1.0,
             1.1,
             float('-inf'),
-            float('inf')
+            float('inf'),
         ]]
         self.assertTrue(
             math.isnan(
@@ -51,27 +62,35 @@ class JSONTest(unittest.TestCase):
         [self._run_test_case(value) for value in [
             "hello",
             "a'b",
-            "a\"b"
+            "a\"b",
+            # some unicode strings from http://www.alanwood.net/unicode/unicode_samples.html
+            'ɖɞɫɷ',
+            u'ɖɞɫɷ'.encode('utf-8'),
+            u'ɖɞɫɷ'.encode('utf-16'),
+            u'ɖɞɫɷ'.encode('utf-32'),
+            'a\x00b', # with null byte
         ]]
 
     def test_vec_to_json(self):
         [self._run_test_case(value) for value in [
             array.array('d'),
             array.array('d', [1.5]),
-            array.array('d', [2.1,2.5,3.1])
+            array.array('d', [2.1,2.5,3.1]),
         ]]
 
     def test_list_to_json(self):
-        [self._run_test_case(value) for value in [
-            [],
-            ["hello", "world"],
-            ["hello", 3, None]
-        ]]
-        # TODO -- can't test just numbers, due to (Python <-> flexible_type)
-        # not being reversible for lists of numbers.
+        # TODO -- we can't test lists of numbers, due to
+        # Python<->flexible_type not being reversible for lists of numbers.
         # if `list` of `int` goes into C++, the flexible_type representation
         # becomes flex_vec (vector<flex_float>). This is a lossy representation.
         # known issue, can't resolve here.
+        [self._run_test_case(value) for value in [
+            [],
+            ["hello", "world"],
+            ["hello", 3, None],
+            [3.14159, None],
+            [{}, {'x': 1, 'y': 2}],
+        ]]
 
     def test_dict_to_json(self):
         [self._run_test_case(value) for value in [
@@ -79,7 +98,7 @@ class JSONTest(unittest.TestCase):
             {
                 "x": 1,
                 "y": 2
-            }
+            },
         ]]
 
     def test_date_time_to_json(self):
@@ -87,7 +106,7 @@ class JSONTest(unittest.TestCase):
         [self._run_test_case(value) for value in [
             d,
             pytz.utc.localize(d),
-            pytz.timezone('US/Arizona').localize(d)
+            pytz.timezone('US/Arizona').localize(d),
         ]]
 
     def test_image_to_json(self):
