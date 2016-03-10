@@ -15,6 +15,8 @@ import pytz
 import sframe
 import unittest
 
+from . import util
+
 class image_info:
     def __init__(self, url):
         self.url = url
@@ -39,20 +41,31 @@ image_info = [image_info(u) for u in image_urls]
 def _print_hex_bytes(s):
     print ":".join("{:02x}".format(ord(c)) for c in s)
 
+_SFrameComparer = util.SFrameComparer()
+
 class JSONTest(unittest.TestCase):
+    def _assertEquals(self, x, y):
+        import sframe
+        self.assertEquals(type(x), type(y))
+        if isinstance(x, sframe.SArray):
+            _SFrameComparer._assert_sarray_equal(x, y)
+        elif isinstance(x, sframe.SFrame):
+            _SFrameComparer._assert_sframe_equal(x, y)
+        else:
+            self.assertEquals(x, y)
+
     def _run_test_case(self, value):
         # test that JSON serialization is invertible with respect to both
         # value and type.
         if isinstance(value, str):
             print "Input string is:"
             _print_hex_bytes(value)
-        json = sframe.extensions.json.dumps(value)
+        json = sframe.json.dumps(value)
         print "Serialized json is:"
         print json
         print "as hex:"
         _print_hex_bytes(json)
-        self.assertEquals(type(sframe.extensions.json.loads(json)), type(value))
-        self.assertEquals(sframe.extensions.json.loads(json), value)
+        self._assertEquals(sframe.json.loads(json), value)
 
     def test_int(self):
         [self._run_test_case(value) for value in [
@@ -76,8 +89,8 @@ class JSONTest(unittest.TestCase):
         ]]
         self.assertTrue(
             math.isnan(
-                sframe.extensions.json.loads(
-                    sframe.extensions.json.dumps(float('nan')))))
+                sframe.json.loads(
+                    sframe.json.dumps(float('nan')))))
 
     def test_string_to_json(self):
         # TODO znation - test non-ascii, non-utf-8 charsets. test null byte inside string.
@@ -134,4 +147,48 @@ class JSONTest(unittest.TestCase):
     def test_image_to_json(self):
         [self._run_test_case(value) for value in [
             sframe.Image(path=item.url, format=item.format) for item in image_info
+        ]]
+
+    def test_sarray_to_json(self):
+        d = datetime.datetime(year=2016, month=3, day=5)
+        [self._run_test_case(value) for value in [
+            sframe.SArray(),
+            sframe.SArray([1,2,3]),
+            sframe.SArray([1.0,2.0,3.0]),
+            sframe.SArray([None, 3, None]),
+            sframe.SArray(["hello", "world"]),
+            sframe.SArray([
+                u'ɖɞɫɷ'.encode('utf-8'),
+                u'ɖɞɫɷ'.encode('utf-16'),
+                u'ɖɞɫɷ'.encode('utf-32'),
+            ]),
+            sframe.SArray(array.array('d', [2.1,2.5,3.1])),
+            sframe.SArray([
+                ["hello", None, "world"],
+                ["hello", 3, None],
+                [3.14159, None],
+            ]),
+            sframe.SArray([
+                {
+                    "x": 1,
+                    "y": 2
+                }, {
+                    "x": 5,
+                    "z": 3
+                },
+            ]),
+            sframe.SArray([
+                d,
+                pytz.utc.localize(d),
+                pytz.timezone('US/Arizona').localize(d),
+            ]),
+            sframe.SArray([
+                sframe.Image(path=item.url, format=item.format) for item in image_info
+            ]),
+        ]]
+
+    def test_sframe_to_json(self):
+        [self._run_test_case(value) for value in [
+            sframe.SFrame(),
+            #sframe.SFrame({'foo': [1,2,3,4], 'bar': [None, "Hello", None, "World"]}),
         ]]
